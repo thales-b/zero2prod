@@ -1,6 +1,35 @@
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "linker=clang", "-C", "link-arg=-fuse-ld=lld"]
+
 [package]
 name = "zero2prod"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "zero2prod"
+
 [dependencies]
+actix-web = "4"
+config = "0.15.11"
+serde = { version = "1", features = ["derive"]}
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dependencies.sqlx]
+version = "0.7"
+default-features = false
+features = [
+	"runtime-tokio-rustls",
+	"macros",
+	"postgres",
+	"uuid",
+	"chrono",
+	"migrate"
+]
+
+[dev-dependencies]
+reqwest = "0.12.19"
