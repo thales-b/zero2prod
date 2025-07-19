@@ -1,11 +1,10 @@
 use actix_web::{web, HttpResponse};
 use chrono::Utc;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    domain::{NewSubscriber, SubscriberEmail, SubscriberName},
+    domain::{NewSubscriber, SubscriberEmail, SubscriberName, SubscriptionToken},
     email_client::EmailClient,
     startup::ApplicationBaseUrl,
 };
@@ -30,7 +29,7 @@ pub async fn subscribe(
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> HttpResponse {
-    let new_subscriber = match form.0.try_into() {
+    let new_subscriber: NewSubscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
@@ -38,11 +37,17 @@ pub async fn subscribe(
         Ok(transaction) => transaction,
         Err(_) => return HttpResponse::InternalServerError().finish(),
     };
-    let subscriber_id = match insert_subscriber(&mut transaction, &new_subscriber).await {
-        Ok(subscriber_id) => subscriber_id,
+    let subscriber_id = match find_subscriber_by_email(&mut transaction, new_subscriber.email.as_ref()).await {
+        Ok(Some(existing_id)) => existing_id,
+        Ok(None) => {
+            match insert_subscriber(&mut transaction, &new_subscriber).await {
+                Ok(new_id) => new_id,
+                Err(_) => return HttpResponse::InternalServerError().finish(),
+            }
+        }
         Err(_) => return HttpResponse::InternalServerError().finish(),
     };
-    let subscription_token = generate_subscription_token();
+    let subscription_token = SubscriptionToken::generate();
     if store_token(&mut transaction, subscriber_id, &subscription_token)
         .await
         .is_err()
@@ -67,23 +72,41 @@ pub async fn subscribe(
 }
 
 #[tracing::instrument(
+    name = "Find subscriber by email",
+    skip(transaction, email)
+)]
+pub async fn find_subscriber_by_email(
+    transaction: &mut Transaction<'_, Postgres>,
+    email: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        SELECT id FROM subscriptions WHERE email = $1
+        "#,
+        email
+    )
+    .fetch_optional(&mut **transaction)
+    .await?;
+
+    Ok(result.map(|r| r.id))
+}
+
+#[tracing::instrument(
     name = "Store subscription token in the database",
     skip(subscription_token, transaction)
 )]
 pub async fn store_token(
     transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: Uuid,
-    subscription_token: &str,
+    subscription_token: &SubscriptionToken,
 ) -> Result<(), sqlx::Error> {
     let query = sqlx::query!(
         r#"INSERT INTO subscription_tokens (subscription_token, subscriber_id)
         VALUES ($1, $2)"#,
-        subscription_token,
+        subscription_token.as_ref(),
         subscriber_id
     );
-    transaction.execute(query)
-    .await
-    .map_err(|e| {
+    transaction.execute(query).await.map_err(|e| {
         tracing::error!("Failed to execute query: {:?}", e);
         e
     })?;
@@ -92,17 +115,17 @@ pub async fn store_token(
 
 #[tracing::instrument(
     name = "Send a confirmation email to a new subscriber",
-    skip(email_client, new_subscriber, base_url)
+    skip(email_client, new_subscriber, base_url, subscription_token)
 )]
 pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
     base_url: &str,
-    subscription_token: &str,
+    subscription_token: &SubscriptionToken,
 ) -> Result<(), reqwest::Error> {
     let confirmation_link = format!(
         "{}/subscriptions/confirm?subscription_token={}",
-        base_url, subscription_token
+        base_url, subscription_token.as_ref()
     );
     let plain_body = format!(
         "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
@@ -151,12 +174,4 @@ pub async fn insert_subscriber(
         e
     })?;
     Ok(subscriber_id)
-}
-
-fn generate_subscription_token() -> String {
-    let mut rng = thread_rng();
-    std::iter::repeat_with(|| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(25)
-        .collect()
 }

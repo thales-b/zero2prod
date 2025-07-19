@@ -60,3 +60,39 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
     assert_eq!(saved.name, "le guin");
     assert_eq!(saved.status, "confirmed");
 }
+
+#[tokio::test]
+async fn confirm_rejects_nonexistent_token_with_401() {
+    // Arrange
+    let app = spawn_app().await;
+    let fake_token = "aaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    // Act
+    let response = reqwest::get(&format!(
+        "{}/subscriptions/confirm?subscription_token={}",
+        app.address, fake_token
+    ))
+    .await
+    .unwrap();
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 401);
+}
+
+#[tokio::test]
+async fn confirm_rejects_invalid_token_format_with_400() {
+    // Arrange
+    let app = spawn_app().await;
+    let invalid_token = "bad";
+
+    // Act
+    let response = reqwest::get(&format!(
+        "{}/subscriptions/confirm?subscription_token={}",
+        app.address, invalid_token
+    ))
+    .await
+    .unwrap();
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 400);
+}
