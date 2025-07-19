@@ -110,7 +110,7 @@ async fn subscribing_twice_sends_two_confirmation_emails() {
     // Arrange
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    
+
     Mock::given(path("/email"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))

@@ -23,7 +23,7 @@ impl SubscriptionToken {
         let is_not_alphanumeric = !s.chars().all(|c| c.is_ascii_alphanumeric());
 
         if is_empty || is_wrong_length || is_not_alphanumeric {
-            Err(format!("Invalid subscription token: '{}'", s))
+            Err(format!("Invalid subscription token: '{s}'"))
         } else {
             Ok(Self(s))
         }

@@ -39,9 +39,9 @@ impl EmailClient {
         let request_body = SendEmailRequest {
             from: self.sender.as_ref(),
             to: recipient.as_ref(),
-            subject: subject.as_ref(),
-            html_body: html_content.as_ref(),
-            text_body: text_content.as_ref(),
+            subject,
+            html_body: html_content,
+            text_body: text_content,
         };
         self.http_client
             .post(url)
