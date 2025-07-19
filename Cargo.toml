@@ -32,6 +32,7 @@ unicode-segmentation = "1.12.0"
 validator = { version = "0.20", features = ["derive"] }
 reqwest = { version = "0.12.22", features = ["json"] }
 rand = { version = "0.8", features = ["std_rng"] }
+tera = "1.20.0"
 
 [dependencies.sqlx]
 version = "0.8.1"

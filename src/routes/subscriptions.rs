@@ -1,12 +1,13 @@
 use actix_web::{web, HttpResponse};
 use chrono::Utc;
 use sqlx::{Executor, PgPool, Postgres, Transaction};
+use tera::Context;
 use uuid::Uuid;
 
 use crate::{
     domain::{NewSubscriber, SubscriberEmail, SubscriberName, SubscriptionToken},
     email_client::EmailClient,
-    startup::ApplicationBaseUrl,
+    startup::{ApplicationBaseUrl, TEMPLATES},
 };
 
 #[derive(serde::Deserialize)]
@@ -124,13 +125,15 @@ pub async fn send_confirmation_email(
         base_url,
         subscription_token.as_ref()
     );
-    let plain_body = format!(
-        "Welcome to our newsletter!\nVisit {confirmation_link} to confirm your subscription."
-    );
-    let html_body = format!(
-        "Welcome to our newsletter!<br />\
-        Click <a href=\"{confirmation_link}\">here</a> to confirm your subscription."
-    );
+    let mut context = Context::new();
+    context.insert("confirmation_link", &confirmation_link);
+
+    let plain_body = TEMPLATES
+        .render("confirmation_email.txt", &context)
+        .expect("Failed to render confirmation_email.txt");
+    let html_body = TEMPLATES
+        .render("confirmation_email.html", &context)
+        .unwrap();
     email_client
         .send_email(new_subscriber.email, "Welcome!", &html_body, &plain_body)
         .await

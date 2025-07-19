@@ -3,8 +3,10 @@ use crate::routes::{confirm, health_check, subscribe};
 use actix_web::dev::Server;
 use actix_web::web::Data;
 use actix_web::{web, App, HttpServer};
+use once_cell::sync::Lazy;
 use sqlx::PgPool;
 use std::net::TcpListener;
+use tera::Tera;
 use tracing_actix_web::TracingLogger;
 
 use crate::configuration::{DatabaseSettings, Settings};
@@ -14,6 +16,9 @@ pub struct Application {
     port: u16,
     server: Server,
 }
+
+pub static TEMPLATES: Lazy<Tera> =
+    Lazy::new(|| Tera::new("templates/**/*").expect("Failed to initialize Tera templates"));
 
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
