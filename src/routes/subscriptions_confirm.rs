@@ -43,11 +43,12 @@ pub async fn confirm(
     let subscription_token = SubscriptionToken::parse(parameters.subscription_token.clone())
         .map_err(|_| ConfirmError::InvalidToken)?;
 
-    let id = get_subscriber_id_from_token(&pool, &subscription_token)
+    let subscriber_id_opt = get_subscriber_id_from_token(&pool, &subscription_token)
         .await
-        .map_err(|_| ConfirmError::UnknownToken)?;
+        .context("Failed to query the subscriber associated with the token.")?;
+    let subscriber_id = subscriber_id_opt.ok_or(ConfirmError::UnknownToken)?;
 
-    confirm_subscriber(&pool, id.unwrap())
+    confirm_subscriber(&pool, subscriber_id)
         .await
         .context("Failed to confirm subscriber.")?;
 
